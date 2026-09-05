@@ -46,6 +46,13 @@ func (p *Parser) parseShadowsocks(proxyURL string) (*model.ProxyNode, error) {
 		content = parts[0]
 	}
 
+	var queryStr string
+	if qIdx := strings.Index(content, "?"); qIdx != -1 {
+		queryStr = content[qIdx+1:]
+		content = content[:qIdx]
+	}
+	content = strings.TrimSuffix(content, "/")
+
 	var methodPassword, serverPort string
 
 	// Check if the URL has an @ outside base64 (e.g. ss://base64(userinfo)@host:port)
@@ -100,6 +107,19 @@ func (p *Parser) parseShadowsocks(proxyURL string) (*model.ProxyNode, error) {
 		return nil, fmt.Errorf("invalid port: %w", err)
 	}
 	node.ServerPort = port
+
+	if queryStr != "" {
+		if q, err := url.ParseQuery(queryStr); err == nil {
+			if pluginVal := q.Get("plugin"); pluginVal != "" {
+				pluginParts := strings.SplitN(pluginVal, ";", 2)
+				node.Plugin = pluginParts[0]
+				if len(pluginParts) > 1 {
+					node.PluginOpts = pluginParts[1]
+				}
+			}
+		}
+	}
+
 	node.Raw = proxyURL
 
 	return node, nil
@@ -252,7 +272,12 @@ func (p *Parser) parseTrojan(proxyURL string) (*model.ProxyNode, error) {
 		return nil, fmt.Errorf("invalid trojan URL format")
 	}
 
-	node.Password = baseURL[:atIndex]
+	unescapedPass, err := url.QueryUnescape(baseURL[:atIndex])
+	if err == nil {
+		node.Password = unescapedPass
+	} else {
+		node.Password = baseURL[:atIndex]
+	}
 	serverPort := baseURL[atIndex+1:]
 
 	colonIndex := strings.LastIndex(serverPort, ":")

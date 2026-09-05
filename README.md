@@ -3,12 +3,12 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/LalatinaHub/common.svg)](https://pkg.go.dev/github.com/LalatinaHub/common)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**`common`** is the foundation (Leaf Module) for the LalatinaHub ecosystem. It provides core domain models, Turso LibSQL database connection pooling, repository interfaces and SQL implementations, and generic proxy URL parsers.
+**`common`** is the foundation (Leaf Module) for the LalatinaHub ecosystem. It provides core domain models, Turso LibSQL database connection pooling, repository interfaces and SQL implementations, bi-directional proxy URL parsers/formatters, pure-Go multi-format client subconverters (Clash Meta YAML, sing-box v1.14+ JSON, SFA/BFR, Base64), IATA airport geolocation lookup, network probe runners, and high-performance UDP packet relaying.
 
 Designed strictly following the **Leaf Module Pattern**:
-- 🟢 **Zero heavy dependencies**: Only relies on the Go standard library and the official `libsql-client-go` driver.
-- 🟢 **No Framework Lock-in**: Zero imports of `sing-box`, `caddy`, `gin`, or other runtime engines.
-- 🟢 **Cross-Project Reusability**: Safe for import across `LatinaServer`, `LatinaBot` (Telegram Bot), CLI utilities, and Web Dashboards without dependency version conflicts.
+- 🟢 **Zero heavy runtime dependencies**: Only relies on the Go standard library, `libsql-client-go`, and `yaml.v3`.
+- 🟢 **No Framework Lock-in**: Zero imports of `sing-box`, `caddy`, `gin`, or heavy proxy engines.
+- 🟢 **Cross-Project Reusability**: Safe for import across `LatinaServer`, `LatinaApi` (subscription gateway), `LatinaBot` (Telegram Bot), CLI utilities, and Web Dashboards without dependency version conflicts.
 
 ---
 
@@ -18,9 +18,13 @@ Designed strictly following the **Leaf Module Pattern**:
 github.com/LalatinaHub/common
 ├── database/          # Turso LibSQL connection pool & index management
 ├── model/             # Core domain models (User, Server, KeyValue, ProxyNode)
-├── proxy/             # Generic proxy URL parser (SS, VMess, VLESS, Trojan)
-└── repository/        # SQL repositories and data access interfaces
-    └── mocks/         # Testify mocks for unit tests
+├── proxy/             # Bi-directional proxy URL parser & formatter (SS, VMess, VLESS, Trojan)
+├── repository/        # SQL repositories and data access interfaces
+│   └── mocks/         # Testify mocks for unit tests
+├── subconverter/      # Pure-Go client profile generator (Clash Meta YAML, sing-box v1.14+ JSON, Base64, SFA/BFR)
+├── region/            # IATA 3-letter airport code geolocation lookup table (9,200+ entries, O(1))
+├── probe/             # Concurrent network diagnostic probes (YouTube CDN, Netflix unlock)
+└── udprelay/          # High-performance UDP packet relay with sync.Pool & timeout safety
 ```
 
 ### 1. `model`
@@ -46,25 +50,48 @@ Clean architecture repository implementations:
 - **`mocks`**: Pre-generated `testify/mock` structs for unit testing consumer services.
 
 ### 4. `proxy`
-Pure Go parser for popular proxy URL formats:
-- Supports `ss://` (Shadowsocks with base64 and standard URI formats).
-- Supports `vmess://` (Base64 JSON format).
-- Supports `vless://` (VLESS with query parameters: ws, grpc, tls).
-- Supports `trojan://` (Trojan with query parameters: ws, tls).
+Bi-directional, pure-Go parser and formatter for popular proxy URL formats:
+- **`Parser`**: Parses `ss://`, `vmess://`, `vless://`, and `trojan://` URLs into `*model.ProxyNode`.
+- **`Formatter`**: Serializes `*model.ProxyNode` into standard proxy URLs (`Format` and `FormatString`).
+
+### 5. `subconverter`
+Universal client configuration converter without importing heavy proxy core runtimes:
+- **Clash Meta (Mihomo)**: Generates complete YAML with proxy groups (`PROXIES`, `AUTO-FALLBACK`, `LOAD-BALANCE`) and rules.
+- **sing-box v1.14+**: Generates modern JSON configurations with DNS, Inbounds, Outbounds, and Rules.
+- **SFA / BFR**: Compatibility profiles for mobile sing-box clients.
+- **Raw & Base64**: Plain-text lines and standard Base64-encoded strings for v2rayNG, Shadowrocket, and NekoBox.
+- **Template Post-processing**: Supports `"cf"` Cloudflare Trojan UDP detour injection.
+
+### 6. `region`
+High-speed geolocation lookup from 3-letter IATA airport codes:
+- Pre-compiled static mapping table with over 9,200 international airport codes.
+- `Lookup(code string) (string, bool)` with case-insensitive, zero-allocation lookup.
+
+### 7. `probe`
+Network diagnostic probe engine:
+- Concurrent worker execution with panic recovery and context deadline enforcement.
+- **`YouTubeCDN`**: Extracts IATA airport code and city mapping via Google Video redirector.
+- **`Netflix`**: Detects streaming license unlocking and country code.
+
+### 8. `udprelay`
+Zero-dependency UDP packet relay:
+- Thread-safe buffer pooling with `sync.Pool` (2048-byte buffers).
+- Direct raw UDP relay (`Relay`) and Base64-encoded HTTP-friendly relay (`RelayBase64`).
+- Strict context timeout and deadline management.
 
 ---
 
 ## 🚀 Installation
 
 ```bash
-go get github.com/LalatinaHub/common@v0.1.0
+go get github.com/LalatinaHub/common@latest
 ```
 
 ---
 
 ## 💡 Usage Examples
 
-### Parsing Proxy URLs
+### Parsing and Formatting Proxy URLs
 
 ```go
 package main
@@ -82,63 +109,69 @@ func main() {
 	}
 
 	fmt.Printf("Server: %s:%d, Method: %s\n", node.Server, node.ServerPort, node.Method)
+
+	// Re-serialize back to URL
+	urlStr, err := proxy.FormatString(node)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Formatted URL: %s\n", urlStr)
 }
 ```
 
-### Initializing Database and Repositories
+### Converting Proxy Nodes to Clash and sing-box
 
 ```go
 package main
 
 import (
-	"context"
 	"fmt"
-	"github.com/LalatinaHub/common/database"
-	"github.com/LalatinaHub/common/repository"
+	"github.com/LalatinaHub/common/model"
+	"github.com/LalatinaHub/common/subconverter"
 )
 
 func main() {
-	db, err := database.GetDB()
-	if err != nil {
-		panic(err)
+	nodes := []model.ProxyNode{
+		{
+			VPN:        "trojan",
+			Server:     "tr.example.com",
+			ServerPort: 443,
+			Password:   "secret",
+			TLS:        true,
+			Remark:     "Trojan-SG",
+		},
 	}
 
-	userRepo := repository.NewUserRepository(db)
-	users, err := userRepo.GetActiveUsersGroupedByVPN(context.Background())
-	if err != nil {
-		panic(err)
-	}
+	conv := subconverter.New(nodes)
 
-	for vpn, list := range users {
-		fmt.Printf("[%s] Active users: %d\n", vpn, len(list))
-	}
+	// Generate Clash Meta YAML
+	clashYAML, _ := conv.ToClash("cf")
+	fmt.Println(clashYAML)
+
+	// Generate sing-box v1.14+ JSON
+	singboxJSON, _ := conv.ToSingbox("standard", "cf")
+	fmt.Println(singboxJSON)
+
+	// Generate Base64 subscription
+	b64 := conv.ToBase64()
+	fmt.Println(b64)
 }
 ```
 
-### Using Repository Mocks in Tests
+### Checking Edge Node Geolocation with IATA
 
 ```go
-package mytest
+package main
 
 import (
-	"context"
-	"testing"
-	"github.com/LalatinaHub/common/model"
-	"github.com/LalatinaHub/common/repository/mocks"
-	"github.com/stretchr/testify/assert"
+	"fmt"
+	"github.com/LalatinaHub/common/region"
 )
 
-func TestMyService(t *testing.T) {
-	mockUserRepo := new(mocks.MockUserRepository)
-	ctx := context.Background()
-
-	mockUserRepo.On("GetActiveUsersGroupedByVPN", ctx).Return(map[string][]model.User{
-		"trojan": {{ID: 1, Token: "abc"}},
-	}, nil)
-
-	users, err := mockUserRepo.GetActiveUsersGroupedByVPN(ctx)
-	assert.NoError(t, err)
-	assert.Len(t, users["trojan"], 1)
+func main() {
+	if city, ok := region.Lookup("CGK"); ok {
+		fmt.Printf("Airport CGK is in %s\n", city) // JAKARTA-CENGKARENG
+	}
 }
 ```
 
@@ -146,10 +179,10 @@ func TestMyService(t *testing.T) {
 
 ## 🧪 Testing
 
-Run test suite with coverage:
+Run test suite:
 
 ```bash
-go test -v -race -cover ./...
+go test -v ./...
 ```
 
 ---
