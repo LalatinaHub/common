@@ -13,7 +13,7 @@ func (s *Subconverter) ToRaw() []string {
 	for i := range s.nodes {
 		node := &s.nodes[i]
 		if node.Raw != "" {
-			lines = append(lines, node.Raw)
+			lines = append(lines, proxy.DecodeIfBase64(node.Raw))
 			continue
 		}
 

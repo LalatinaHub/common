@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/LalatinaHub/common/model"
+	"github.com/LalatinaHub/common/proxy"
 )
 
 type proxyRepo struct {
@@ -63,6 +64,8 @@ func (r *proxyRepo) GetRelays(ctx context.Context, excludedCountryCodes []string
 		if err != nil {
 			continue // Gracefully skip unparseable proxy row
 		}
+
+		p.Raw = proxy.DecodeIfBase64(p.Raw)
 
 		if slices.Contains(excludedCountryCodes, p.CountryCode) {
 			continue

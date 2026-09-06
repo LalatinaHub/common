@@ -110,6 +110,24 @@ func TestSubconverter_ToRawAndBase64(t *testing.T) {
 	assert.Equal(t, rawStr, string(decoded))
 }
 
+func TestSubconverter_ToRaw_DecodesBase64RawNode(t *testing.T) {
+	rawVless := "vless://30a88c40-581e-4952-aa4c-8af95686ede0@www.gov.ua:8880?encryption=none&security=none&type=ws#@DeltaKroneckerGithub"
+	b64Vless := base64.StdEncoding.EncodeToString([]byte(rawVless))
+
+	nodes := []model.ProxyNode{
+		{
+			VPN: "vless",
+			Raw: b64Vless,
+		},
+	}
+
+	sub := subconverter.New(nodes)
+	rawList := sub.ToRaw()
+	require.Len(t, rawList, 1)
+	assert.Equal(t, rawVless, rawList[0])
+	assert.NotContains(t, rawList[0], b64Vless)
+}
+
 func TestSubconverter_ToClash(t *testing.T) {
 	sub := subconverter.New(sampleNodes())
 

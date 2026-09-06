@@ -266,3 +266,20 @@ func TestParser_UnsupportedProtocol(t *testing.T) {
 	assert.Nil(t, node)
 	assert.Contains(t, err.Error(), "unsupported proxy protocol")
 }
+
+func TestParser_ParseBase64EncodedURL(t *testing.T) {
+	parser := proxy.NewParser()
+
+	// Base64 encoded vless URL (from real-world example)
+	b64 := "dmxlc3M6Ly8zMGE4OGM0MC01ODFlLTQ5NTItYWE0Yy04YWY5NTY4NmVkZTBAd3d3Lmdvdi51YTo4ODgwP2VuY3J5cHRpb249bm9uZSZzZWN1cml0eT1ub25lJnR5cGU9d3MmaG9zdD1yYXBpZC1sYWItOTVlZi4xNzMtNzRjLndvcmtlcnMuZGV2JnBhdGg9L3B5aXA9cHJveHlpcC5rci5jbWxpdXNzc3MubmV0I0BEZWx0YUtyb25lY2tlckdpdGh1Yg=="
+	node, err := parser.Parse(b64)
+	require.NoError(t, err)
+	require.NotNil(t, node)
+	assert.Equal(t, "vless", node.VPN)
+	assert.Equal(t, "www.gov.ua", node.Server)
+	assert.Equal(t, 8880, node.ServerPort)
+	assert.Equal(t, "30a88c40-581e-4952-aa4c-8af95686ede0", node.UUID)
+	assert.Equal(t, "@DeltaKroneckerGithub", node.Remark)
+	assert.Contains(t, node.Raw, "vless://")
+	assert.NotContains(t, node.Raw, "dmxlc3M6")
+}

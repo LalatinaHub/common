@@ -21,9 +21,54 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
+// DecodeIfBase64 checks if the input is a base64-encoded proxy URL and decodes it.
+// If the input is already a plaintext proxy URL or cannot be decoded to one, it is returned as is.
+func DecodeIfBase64(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "vless://") ||
+		strings.HasPrefix(lower, "vmess://") ||
+		strings.HasPrefix(lower, "trojan://") ||
+		strings.HasPrefix(lower, "ss://") ||
+		strings.HasPrefix(lower, "shadowsocks://") {
+		return trimmed
+	}
+
+	isProxyURI := func(s string) bool {
+		low := strings.ToLower(s)
+		return strings.HasPrefix(low, "vless://") ||
+			strings.HasPrefix(low, "vmess://") ||
+			strings.HasPrefix(low, "trojan://") ||
+			strings.HasPrefix(low, "ss://") ||
+			strings.HasPrefix(low, "shadowsocks://")
+	}
+
+	for _, enc := range []*base64.Encoding{
+		base64.StdEncoding,
+		base64.URLEncoding,
+		base64.RawStdEncoding,
+		base64.RawURLEncoding,
+	} {
+		if decoded, err := enc.DecodeString(trimmed); err == nil {
+			str := strings.TrimSpace(string(decoded))
+			if isProxyURI(str) {
+				return str
+			}
+		}
+	}
+
+	return trimmed
+}
+
 // Parse parses a proxy URL string into a ProxyNode.
 // Supported schemes are: ss://, vmess://, vless://, and trojan://.
+// If the proxyURL is base64-encoded, it will be automatically decoded.
 func (p *Parser) Parse(proxyURL string) (*model.ProxyNode, error) {
+	proxyURL = DecodeIfBase64(proxyURL)
 	if strings.HasPrefix(proxyURL, "ss://") {
 		return p.parseShadowsocks(proxyURL)
 	} else if strings.HasPrefix(proxyURL, "vmess://") {
