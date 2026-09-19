@@ -84,14 +84,16 @@ func (s *Subconverter) ToSingboxMap(profile string, template string) (map[string
 
 	dnsServers := []map[string]any{
 		{
-			"tag":     "remote-dns",
-			"address": "1.1.1.1",
-			"detour":  "select",
+			"type":   "udp",
+			"tag":    "remote-dns",
+			"server": "1.1.1.1",
+			"detour": "select",
 		},
 		{
-			"tag":     "direct-dns",
-			"address": "223.5.5.5",
-			"detour":  "direct",
+			"type":   "udp",
+			"tag":    "direct-dns",
+			"server": "223.5.5.5",
+			"detour": "direct",
 		},
 	}
 

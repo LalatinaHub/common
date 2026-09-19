@@ -50,16 +50,12 @@ func TestToSingboxMap_DirectDNS(t *testing.T) {
 	}
 
 	// Verify direct-dns uses proper format
-	if _, hasType := directDNS["type"]; hasType {
-		t.Error("direct-dns should not have 'type' field")
+	if dnsType, ok := directDNS["type"].(string); !ok || dnsType != "udp" {
+		t.Errorf("direct-dns should have 'type': 'udp', got: %v", directDNS["type"])
 	}
 
-	if _, hasServer := directDNS["server"]; hasServer {
-		t.Error("direct-dns should not have 'server' field")
-	}
-
-	if address, ok := directDNS["address"].(string); !ok || address == "" {
-		t.Error("direct-dns should have 'address' field")
+	if server, ok := directDNS["server"].(string); !ok || server == "" {
+		t.Error("direct-dns should have 'server' field")
 	}
 
 	if detour, ok := directDNS["detour"].(string); !ok || detour != "direct" {
