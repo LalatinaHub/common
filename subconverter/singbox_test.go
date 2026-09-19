@@ -58,8 +58,9 @@ func TestToSingboxMap_DirectDNS(t *testing.T) {
 		t.Error("direct-dns should have 'server' field")
 	}
 
-	if detour, ok := directDNS["detour"].(string); !ok || detour != "direct" {
-		t.Errorf("direct-dns detour should be 'direct', got: %v", detour)
+	// Verify direct-dns does NOT have detour field (uses direct connection by default)
+	if _, hasDetour := directDNS["detour"]; hasDetour {
+		t.Error("direct-dns should not have 'detour' field (uses direct connection by default)")
 	}
 }
 
@@ -93,11 +94,15 @@ func TestToSingboxMap_CFTemplate(t *testing.T) {
 	}
 
 	// Check both DNS servers
-	dnsServers := make(map[string]string)
+	dnsServers := make(map[string]interface{})
 	for _, server := range servers {
 		tag := server["tag"].(string)
-		detour := server["detour"].(string)
-		dnsServers[tag] = detour
+		detour, hasDetour := server["detour"]
+		if hasDetour {
+			dnsServers[tag] = detour.(string)
+		} else {
+			dnsServers[tag] = nil
+		}
 	}
 
 	// remote-dns should use Trojan UDP
@@ -105,9 +110,9 @@ func TestToSingboxMap_CFTemplate(t *testing.T) {
 		t.Errorf("remote-dns should use 'Trojan UDP', got: %v", dnsServers["remote-dns"])
 	}
 
-	// direct-dns should still use direct
-	if dnsServers["direct-dns"] != "direct" {
-		t.Errorf("direct-dns should use 'direct', got: %v", dnsServers["direct-dns"])
+	// direct-dns should not have detour (uses direct connection by default)
+	if dnsServers["direct-dns"] != nil {
+		t.Errorf("direct-dns should not have detour field, got: %v", dnsServers["direct-dns"])
 	}
 
 	// Verify Trojan UDP outbound exists

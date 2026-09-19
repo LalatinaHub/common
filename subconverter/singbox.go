@@ -93,7 +93,7 @@ func (s *Subconverter) ToSingboxMap(profile string, template string) (map[string
 			"type":   "udp",
 			"tag":    "direct-dns",
 			"server": "223.5.5.5",
-			"detour": "direct",
+			// No detour field = uses direct connection by default
 		},
 	}
 
