@@ -84,16 +84,14 @@ func (s *Subconverter) ToSingboxMap(profile string, template string) (map[string
 
 	dnsServers := []map[string]any{
 		{
-			"tag":    "remote-dns",
-			"type":   "udp",
-			"server": "1.1.1.1",
-			"detour": "select",
+			"tag":     "remote-dns",
+			"address": "1.1.1.1",
+			"detour":  "select",
 		},
 		{
-			"tag":    "direct-dns",
-			"type":   "udp",
-			"server": "223.5.5.5",
-			"detour": "direct",
+			"tag":     "direct-dns",
+			"address": "223.5.5.5",
+			"detour":  "direct",
 		},
 	}
 
@@ -141,9 +139,9 @@ func (s *Subconverter) ToSingboxMap(profile string, template string) (map[string
 		}
 		outbounds = append(outbounds, udpOutbound)
 
-		// Set DNS UDP detour to Trojan UDP
+		// Set DNS detour to Trojan UDP for remote-dns only
 		for i := range dnsServers {
-			if dnsServers[i]["type"] == "udp" {
+			if dnsServers[i]["tag"] == "remote-dns" {
 				dnsServers[i]["detour"] = "Trojan UDP"
 			}
 		}
