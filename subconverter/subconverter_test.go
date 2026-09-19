@@ -189,12 +189,40 @@ func TestSubconverter_ToSingbox(t *testing.T) {
 
 	outbounds, ok := sbConfig["outbounds"].([]any)
 	require.True(t, ok)
-	// 2 groups (select, auto) + 4 nodes + 3 system (direct, block, dns-out) = 9
-	assert.Len(t, outbounds, 9)
+	// 2 groups (select, auto) + 4 nodes + 2 system (direct, block) = 8
+	assert.Len(t, outbounds, 8)
 
 	firstOB := outbounds[0].(map[string]any)
 	assert.Equal(t, "selector", firstOB["type"])
 	assert.Equal(t, "select", firstOB["tag"])
+
+	// Verify no deprecated "dns" outbound exists
+	for _, ob := range outbounds {
+		obMap := ob.(map[string]any)
+		assert.NotEqual(t, "dns", obMap["type"], "deprecated 'dns' outbound type should not exist in sing-box 1.14+")
+	}
+
+	// Verify route rules have proper structure for sing-box 1.14.1
+	route, ok := sbConfig["route"].(map[string]any)
+	require.True(t, ok)
+
+	rules, ok := route["rules"].([]any)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, len(rules), 3, "should have at least sniff, hijack-dns, and direct rules")
+
+	// First rule should be sniff action
+	firstRule := rules[0].(map[string]any)
+	assert.Equal(t, "sniff", firstRule["action"], "first route rule must be sniff action")
+
+	// Second rule should be logical DNS hijack (protocol dns OR port 53)
+	secondRule := rules[1].(map[string]any)
+	assert.Equal(t, "logical", secondRule["type"], "DNS hijack must use logical rule type")
+	assert.Equal(t, "or", secondRule["mode"], "DNS hijack must use OR mode")
+	assert.Equal(t, "hijack-dns", secondRule["action"], "DNS hijack action is required")
+
+	logicalRules, ok := secondRule["rules"].([]any)
+	require.True(t, ok)
+	require.Len(t, logicalRules, 2, "DNS hijack must match both protocol dns and port 53")
 }
 
 func TestSubconverter_ToSFA_And_BFR(t *testing.T) {

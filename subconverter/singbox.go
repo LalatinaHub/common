@@ -80,35 +80,39 @@ func (s *Subconverter) ToSingboxMap(profile string, template string) (map[string
 			"type": "block",
 			"tag":  "block",
 		},
-		map[string]any{
-			"type": "dns",
-			"tag":  "dns-out",
-		},
 	)
 
 	dnsServers := []map[string]any{
 		{
-			"tag":     "remote-dns",
-			"type":    "udp",
-			"server":  "1.1.1.1",
-			"detour":  "select",
+			"tag":    "remote-dns",
+			"type":   "udp",
+			"server": "1.1.1.1",
+			"detour": "select",
 		},
 		{
-			"tag":     "direct-dns",
-			"type":    "udp",
-			"server":  "223.5.5.5",
-			"detour":  "direct",
+			"tag":    "direct-dns",
+			"type":   "udp",
+			"server": "223.5.5.5",
+			"detour": "direct",
 		},
 	}
 
 	routeRules := []map[string]any{
 		{
-			"action":   "hijack-dns",
-			"protocol": "dns",
+			"action": "sniff",
 		},
 		{
-			"action":   "route",
-			"outbound": "direct",
+			"type": "logical",
+			"mode": "or",
+			"rules": []map[string]any{
+				{"protocol": "dns"},
+				{"port": 53},
+			},
+			"action": "hijack-dns",
+		},
+		{
+			"action":        "route",
+			"outbound":      "direct",
 			"ip_is_private": true,
 		},
 	}
@@ -171,8 +175,8 @@ func (s *Subconverter) ToSingboxMap(profile string, template string) (map[string
 		},
 		"outbounds": outbounds,
 		"route": map[string]any{
-			"rules": routeRules,
-			"final": "select",
+			"rules":                 routeRules,
+			"final":                 "select",
 			"auto_detect_interface": true,
 		},
 	}
